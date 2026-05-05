@@ -1,0 +1,343 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Видео аналитика</title>
+
+<style>
+body {
+  font-family: Arial, sans-serif;
+  background: #0f172a;
+  color: white;
+  margin: 0;
+  padding: 20px;
+}
+
+h1 {
+  text-align: center;
+}
+
+.card {
+  background: #1e293b;
+  padding: 18px;
+  border-radius: 15px;
+  margin-bottom: 15px;
+}
+
+select, button {
+  width: 100%;
+  padding: 12px;
+  border-radius: 10px;
+  background: #020617;
+  color: white;
+  border: 1px solid #334155;
+  font-size: 16px;
+  margin-bottom: 10px;
+}
+
+button {
+  background: #2563eb;
+  font-weight: bold;
+  cursor: pointer;
+}
+
+table {
+  width: 100%;
+  border-collapse: collapse;
+  background: #1e293b;
+  border-radius: 15px;
+  overflow: hidden;
+}
+
+th, td {
+  padding: 10px;
+  border-bottom: 1px solid #334155;
+  text-align: left;
+}
+
+th {
+  background: #020617;
+}
+
+a {
+  color: #93c5fd;
+  text-decoration: none;
+}
+
+.up {
+  color: #22c55e;
+  font-weight: bold;
+}
+
+.down {
+  color: #ef4444;
+  font-weight: bold;
+}
+
+.same {
+  color: #94a3b8;
+}
+
+.table-wrap {
+  overflow-x: auto;
+}
+
+.pagination {
+  display: flex;
+  gap: 10px;
+  justify-content: center;
+  margin-top: 15px;
+}
+
+@media (max-width: 700px) {
+  body {
+    padding: 10px;
+  }
+
+  table {
+    font-size: 13px;
+  }
+}
+</style>
+</head>
+
+<body>
+
+<h1>Видео аналитика</h1>
+
+<div class="card">
+  <div id="status">Загрузка...</div>
+</div>
+
+<div class="card">
+  <select id="channelSelect"></select>
+
+  <select id="sortSelect">
+    <option value="gained_views">Больше набрало просмотров</option>
+    <option value="gained_likes">Больше набрало лайков</option>
+    <option value="gained_comments">Больше набрало комментариев</option>
+    <option value="views">Всего просмотров</option>
+    <option value="likes">Всего лайков</option>
+    <option value="comments">Всего комментариев</option>
+  </select>
+
+  <select id="orderSelect">
+    <option value="desc">Больше → меньше</option>
+    <option value="asc">Меньше → больше</option>
+  </select>
+</div>
+
+<div class="card">
+  <div class="table-wrap">
+    <table>
+      <thead>
+        <tr>
+          <th>Видео</th>
+          <th>Канал</th>
+          <th>Просмотры</th>
+          <th>За день</th>
+          <th>Лайки</th>
+          <th>За день</th>
+          <th>Комментарии</th>
+          <th>За день</th>
+        </tr>
+      </thead>
+      <tbody id="videoTable"></tbody>
+    </table>
+  </div>
+
+  <div class="pagination">
+    <button onclick="prevPage()">Назад</button>
+    <button id="pageInfo">1</button>
+    <button onclick="nextPage()">Вперёд</button>
+  </div>
+</div>
+
+<script>
+const API_BASE = "https://talkingfriendsvideo.qpqalzmnx96.workers.dev";
+
+let latest = [];
+let daily = [];
+let page = 1;
+const PAGE_SIZE = 20;
+
+const channelSelect = document.getElementById("channelSelect");
+const sortSelect = document.getElementById("sortSelect");
+const orderSelect = document.getElementById("orderSelect");
+
+function format(num) {
+  return Number(num || 0).toLocaleString("ru-RU");
+}
+
+function diffText(num) {
+  const n = Number(num || 0);
+
+  if (n > 0) return `<span class="up">▲ +${format(n)}</span>`;
+  if (n < 0) return `<span class="down">▼ ${format(n)}</span>`;
+  return `<span class="same">— 0</span>`;
+}
+
+async function load() {
+  try {
+    const latestRes = await fetch(API_BASE + "/video_latest.json?time=" + Date.now());
+    const dailyRes = await fetch(API_BASE + "/video_daily.json?time=" + Date.now());
+
+    latest = await latestRes.json();
+    daily = await dailyRes.json();
+
+    if (!Array.isArray(latest)) latest = [];
+    if (!Array.isArray(daily)) daily = [];
+
+    fillChannels();
+    render();
+
+    document.getElementById("status").textContent =
+      "Загружено видео: " + format(latest.length);
+
+  } catch (e) {
+    document.getElementById("status").textContent = "Ошибка: " + e.message;
+  }
+}
+
+function getDailyMap() {
+  if (!daily.length) return new Map();
+
+  const lastDay = daily[daily.length - 1];
+  const map = new Map();
+
+  if (lastDay.videos) {
+    lastDay.videos.forEach(v => {
+      map.set(v.video_id, v);
+    });
+  }
+
+  return map;
+}
+
+function fillChannels() {
+  const old = channelSelect.value || "all";
+  channelSelect.innerHTML = "";
+
+  const all = document.createElement("option");
+  all.value = "all";
+  all.textContent = "Все каналы";
+  channelSelect.appendChild(all);
+
+  const channels = [...new Set(latest.map(v => v.channel_title || "Без канала"))].sort();
+
+  channels.forEach(name => {
+    const opt = document.createElement("option");
+    opt.value = name;
+    opt.textContent = name;
+    channelSelect.appendChild(opt);
+  });
+
+  channelSelect.value = [...channelSelect.options].some(o => o.value === old) ? old : "all";
+}
+
+function getRows() {
+  const dailyMap = getDailyMap();
+
+  let rows = latest.map(v => {
+    const d = dailyMap.get(v.video_id) || {};
+
+    return {
+      ...v,
+      gained_views: Number(d.gained_views || 0),
+      gained_likes: Number(d.gained_likes || 0),
+      gained_comments: Number(d.gained_comments || 0)
+    };
+  });
+
+  const selectedChannel = channelSelect.value;
+
+  if (selectedChannel !== "all") {
+    rows = rows.filter(v => (v.channel_title || "Без канала") === selectedChannel);
+  }
+
+  const sortKey = sortSelect.value;
+  const order = orderSelect.value;
+
+  rows.sort((a, b) => {
+    const diff = Number(b[sortKey] || 0) - Number(a[sortKey] || 0);
+    return order === "asc" ? -diff : diff;
+  });
+
+  return rows;
+}
+
+function render() {
+  const rows = getRows();
+  const totalPages = Math.max(1, Math.ceil(rows.length / PAGE_SIZE));
+
+  if (page > totalPages) page = totalPages;
+
+  const start = (page - 1) * PAGE_SIZE;
+  const pageRows = rows.slice(start, start + PAGE_SIZE);
+
+  const tbody = document.getElementById("videoTable");
+  tbody.innerHTML = "";
+
+  pageRows.forEach(v => {
+    const tr = document.createElement("tr");
+
+    tr.innerHTML = `
+      <td>
+        <a href="https://www.youtube.com/watch?v=${v.video_id}" target="_blank">
+          ${v.title || v.video_id}
+        </a>
+      </td>
+      <td>${v.channel_title || "—"}</td>
+      <td>${format(v.views)}</td>
+      <td>${diffText(v.gained_views)}</td>
+      <td>${format(v.likes)}</td>
+      <td>${diffText(v.gained_likes)}</td>
+      <td>${format(v.comments)}</td>
+      <td>${diffText(v.gained_comments)}</td>
+    `;
+
+    tbody.appendChild(tr);
+  });
+
+  document.getElementById("pageInfo").textContent =
+    page + " / " + totalPages;
+}
+
+function nextPage() {
+  const totalPages = Math.max(1, Math.ceil(getRows().length / PAGE_SIZE));
+
+  if (page < totalPages) {
+    page++;
+    render();
+  }
+}
+
+function prevPage() {
+  if (page > 1) {
+    page--;
+    render();
+  }
+}
+
+channelSelect.addEventListener("change", () => {
+  page = 1;
+  render();
+});
+
+sortSelect.addEventListener("change", () => {
+  page = 1;
+  render();
+});
+
+orderSelect.addEventListener("change", () => {
+  page = 1;
+  render();
+});
+
+load();
+setInterval(load, 60000);
+</script>
+
+</body>
+</html>
