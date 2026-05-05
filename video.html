@@ -46,8 +46,6 @@ table {
   width: 100%;
   border-collapse: collapse;
   background: #1e293b;
-  border-radius: 15px;
-  overflow: hidden;
 }
 
 th, td {
@@ -86,18 +84,16 @@ a {
 .pagination {
   display: flex;
   gap: 10px;
-  justify-content: center;
   margin-top: 15px;
 }
 
-@media (max-width: 700px) {
-  body {
-    padding: 10px;
-  }
+.pagination button {
+  flex: 1;
+}
 
-  table {
-    font-size: 13px;
-  }
+.error {
+  color: #f87171;
+  font-weight: bold;
 }
 </style>
 </head>
@@ -114,12 +110,12 @@ a {
   <select id="channelSelect"></select>
 
   <select id="sortSelect">
-    <option value="gained_views">Больше набрало просмотров</option>
-    <option value="gained_likes">Больше набрало лайков</option>
-    <option value="gained_comments">Больше набрало комментариев</option>
     <option value="views">Всего просмотров</option>
     <option value="likes">Всего лайков</option>
     <option value="comments">Всего комментариев</option>
+    <option value="gained_views">За день просмотров</option>
+    <option value="gained_likes">За день лайков</option>
+    <option value="gained_comments">За день комментариев</option>
   </select>
 
   <select id="orderSelect">
@@ -149,7 +145,7 @@ a {
 
   <div class="pagination">
     <button onclick="prevPage()">Назад</button>
-    <button id="pageInfo">1</button>
+    <button id="pageInfo">1 / 1</button>
     <button onclick="nextPage()">Вперёд</button>
   </div>
 </div>
@@ -186,8 +182,19 @@ async function load() {
     latest = await latestRes.json();
     daily = await dailyRes.json();
 
-    if (!Array.isArray(latest)) latest = [];
-    if (!Array.isArray(daily)) daily = [];
+    if (!Array.isArray(latest)) {
+      throw new Error("video_latest.json не массив");
+    }
+
+    if (!Array.isArray(daily)) {
+      daily = [];
+    }
+
+    if (latest.length === 0) {
+      document.getElementById("status").innerHTML =
+        '<span class="error">video_latest.json пустой. Запусти update в Video Worker.</span>';
+      return;
+    }
 
     fillChannels();
     render();
@@ -196,27 +203,32 @@ async function load() {
       "Загружено видео: " + format(latest.length);
 
   } catch (e) {
-    document.getElementById("status").textContent = "Ошибка: " + e.message;
+    document.getElementById("status").innerHTML =
+      '<span class="error">Ошибка: ' + e.message + '</span>';
+    console.error(e);
   }
 }
 
 function getDailyMap() {
-  if (!daily.length) return new Map();
-
-  const lastDay = daily[daily.length - 1];
   const map = new Map();
 
-  if (lastDay.videos) {
-    lastDay.videos.forEach(v => {
-      map.set(v.video_id, v);
-    });
+  if (!daily.length) return map;
+
+  const lastDay = daily[daily.length - 1];
+
+  if (!lastDay.videos || !Array.isArray(lastDay.videos)) {
+    return map;
   }
+
+  lastDay.videos.forEach(v => {
+    map.set(v.video_id, v);
+  });
 
   return map;
 }
 
 function fillChannels() {
-  const old = channelSelect.value || "all";
+  const oldValue = channelSelect.value || "all";
   channelSelect.innerHTML = "";
 
   const all = document.createElement("option");
@@ -224,16 +236,19 @@ function fillChannels() {
   all.textContent = "Все каналы";
   channelSelect.appendChild(all);
 
-  const channels = [...new Set(latest.map(v => v.channel_title || "Без канала"))].sort();
+  const channels = [...new Set(
+    latest.map(v => v.channel_title || "Без канала")
+  )].sort();
 
-  channels.forEach(name => {
-    const opt = document.createElement("option");
-    opt.value = name;
-    opt.textContent = name;
-    channelSelect.appendChild(opt);
+  channels.forEach(channel => {
+    const option = document.createElement("option");
+    option.value = channel;
+    option.textContent = channel;
+    channelSelect.appendChild(option);
   });
 
-  channelSelect.value = [...channelSelect.options].some(o => o.value === old) ? old : "all";
+  const exists = [...channelSelect.options].some(o => o.value === oldValue);
+  channelSelect.value = exists ? oldValue : "all";
 }
 
 function getRows() {
@@ -243,17 +258,21 @@ function getRows() {
     const d = dailyMap.get(v.video_id) || {};
 
     return {
-      ...v,
+      video_id: v.video_id,
+      title: v.title || v.video_id,
+      channel_title: v.channel_title || "Без канала",
+      published_at: v.published_at || "",
+      views: Number(v.views || 0),
+      likes: Number(v.likes || 0),
+      comments: Number(v.comments || 0),
       gained_views: Number(d.gained_views || 0),
       gained_likes: Number(d.gained_likes || 0),
       gained_comments: Number(d.gained_comments || 0)
     };
   });
 
-  const selectedChannel = channelSelect.value;
-
-  if (selectedChannel !== "all") {
-    rows = rows.filter(v => (v.channel_title || "Без канала") === selectedChannel);
+  if (channelSelect.value !== "all") {
+    rows = rows.filter(v => v.channel_title === channelSelect.value);
   }
 
   const sortKey = sortSelect.value;
@@ -285,10 +304,10 @@ function render() {
     tr.innerHTML = `
       <td>
         <a href="https://www.youtube.com/watch?v=${v.video_id}" target="_blank">
-          ${v.title || v.video_id}
+          ${escapeHtml(v.title)}
         </a>
       </td>
-      <td>${v.channel_title || "—"}</td>
+      <td>${escapeHtml(v.channel_title)}</td>
       <td>${format(v.views)}</td>
       <td>${diffText(v.gained_views)}</td>
       <td>${format(v.likes)}</td>
@@ -318,6 +337,15 @@ function prevPage() {
     page--;
     render();
   }
+}
+
+function escapeHtml(text) {
+  return String(text)
+    .replaceAll("&", "&amp;")
+    .replaceAll("<", "&lt;")
+    .replaceAll(">", "&gt;")
+    .replaceAll('"', "&quot;")
+    .replaceAll("'", "&#039;");
 }
 
 channelSelect.addEventListener("change", () => {
