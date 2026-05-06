@@ -1,0 +1,182 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+  <meta charset="UTF-8">
+  <title>История видео</title>
+  <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+  <style>
+    body { font-family: Arial, sans-serif; background:#111; color:white; padding:20px; margin:0; }
+    button, select { padding:10px; border-radius:8px; border:1px solid #444; background:#222; color:white; margin:5px; }
+    .box { background:#1d1d1d; border:1px solid #333; border-radius:14px; padding:15px; margin-top:15px; }
+    img { max-width:420px; width:100%; border-radius:12px; background:#222; }
+    table { width:100%; border-collapse:collapse; margin-top:15px; }
+    th, td { border-bottom:1px solid #333; padding:8px; text-align:left; }
+    a { color:white; }
+  </style>
+</head>
+<body>
+
+<a href="index.html">← Назад</a>
+<h1>История видео</h1>
+
+<div id="videoInfo" class="box">Загрузка...</div>
+
+<div class="box">
+  <select id="groupSelect">
+    <option value="hour">Каждый час</option>
+    <option value="day">Каждый день</option>
+  </select>
+
+  <select id="metricSelect">
+    <option value="views">Просмотры</option>
+    <option value="likes">Лайки</option>
+    <option value="comments">Комментарии</option>
+  </select>
+
+  <button onclick="loadHistory()">Обновить</button>
+  <button onclick="downloadCSV()">Скачать CSV</button>
+</div>
+
+<div class="box">
+  <canvas id="chart"></canvas>
+</div>
+
+<div class="box">
+  <h2>Таблица</h2>
+  <table>
+    <thead>
+      <tr>
+        <th>Время UTC</th>
+        <th>Просмотры</th>
+        <th>Лайки</th>
+        <th>Комментарии</th>
+      </tr>
+    </thead>
+    <tbody id="historyTable"></tbody>
+  </table>
+</div>
+
+<script>
+const API = "https://youtube-video-analytics.qpqalzmnx2.workers.dev";
+const params = new URLSearchParams(window.location.search);
+const VIDEO_ID = params.get("id");
+
+let chart;
+let historyData = [];
+
+function formatNumber(n) {
+  return Number(n || 0).toLocaleString("ru-RU");
+}
+
+function formatUTC(date) {
+  if (!date) return "—";
+  return new Date(date).toISOString().replace("T", " ").replace("Z", " UTC");
+}
+
+async function loadVideo() {
+  const res = await fetch(`${API}/api/video?id=${VIDEO_ID}`);
+  const video = await res.json();
+
+  if (video.error || !video.video_id) {
+    document.getElementById("videoInfo").textContent = "Видео не найдено или ошибка API";
+    return;
+  }
+
+  document.getElementById("videoInfo").innerHTML = `
+    <img src="${video.thumbnail || ""}">
+    <h2>${escapeHtml(video.title)}</h2>
+    <p>ID: ${video.video_id}</p>
+    <p>📅 ${formatUTC(video.published_at)}</p>
+    <p>⏱ ${video.duration} | 🎬 ${video.type}</p>
+    <p>Статус: ${video.status}</p>
+    <p>Обновлено: ${formatUTC(video.checked_at)}</p>
+    <p>
+      👁 ${formatNumber(video.views)}<br>
+      👍 ${formatNumber(video.likes)}<br>
+      💬 ${formatNumber(video.comments)}
+    </p>
+    <p><a href="${video.url}" target="_blank">Открыть на YouTube</a></p>
+  `;
+}
+
+async function loadHistory() {
+  const group = document.getElementById("groupSelect").value;
+  const metric = document.getElementById("metricSelect").value;
+  const res = await fetch(`${API}/api/history?id=${VIDEO_ID}&group=${group}`);
+  historyData = await res.json();
+
+  if (!Array.isArray(historyData)) historyData = [];
+
+  renderChart(metric);
+  renderTable();
+}
+
+function renderChart(metric) {
+  const labels = historyData.map(row => row.time_utc);
+  const values = historyData.map(row => Number(row[metric] || 0));
+
+  if (chart) chart.destroy();
+
+  chart = new Chart(document.getElementById("chart"), {
+    type: "line",
+    data: {
+      labels,
+      datasets: [{ label: metric, data: values }]
+    },
+    options: {
+      responsive: true,
+      scales: {
+        x: { ticks: { color: "white", maxRotation: 45, minRotation: 45 } },
+        y: { ticks: { color: "white" } }
+      },
+      plugins: {
+        legend: { labels: { color: "white" } }
+      }
+    }
+  });
+}
+
+function renderTable() {
+  const tbody = document.getElementById("historyTable");
+  tbody.innerHTML = "";
+
+  historyData.forEach(row => {
+    tbody.innerHTML += `
+      <tr>
+        <td>${row.time_utc}</td>
+        <td>${formatNumber(row.views)}</td>
+        <td>${formatNumber(row.likes)}</td>
+        <td>${formatNumber(row.comments)}</td>
+      </tr>
+    `;
+  });
+}
+
+function downloadCSV() {
+  let csv = "time_utc,views,likes,comments\n";
+  historyData.forEach(row => {
+    csv += `${row.time_utc},${row.views},${row.likes},${row.comments}\n`;
+  });
+
+  const blob = new Blob([csv], { type: "text/csv;charset=utf-8" });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement("a");
+  a.href = url;
+  a.download = `history-${VIDEO_ID}.csv`;
+  a.click();
+  URL.revokeObjectURL(url);
+}
+
+function escapeHtml(text) {
+  return String(text || "").replaceAll("&", "&amp;").replaceAll("<", "&lt;").replaceAll(">", "&gt;");
+}
+
+document.getElementById("metricSelect").addEventListener("change", () => {
+  renderChart(document.getElementById("metricSelect").value);
+});
+
+loadVideo();
+loadHistory();
+</script>
+</body>
+</html>

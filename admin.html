@@ -1,0 +1,96 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+  <meta charset="UTF-8">
+  <title>Admin</title>
+  <style>
+    body { font-family: Arial; background:#111; color:white; padding:20px; margin:0; }
+    input, textarea, button { width:100%; max-width:520px; display:block; padding:10px; margin:10px 0; border-radius:8px; border:1px solid #444; background:#222; color:white; }
+    a { color:white; }
+    pre { background:#1d1d1d; padding:15px; border-radius:12px; overflow:auto; white-space:pre-wrap; }
+  </style>
+</head>
+<body>
+
+<a href="index.html">← Назад</a>
+<h1>Админ-панель</h1>
+
+<input id="adminKey" placeholder="Админ-пароль">
+
+<h2>Обновление</h2>
+<button onclick="runUpdate()">Обновить следующую порцию видео</button>
+<button onclick="resetSync()">Сбросить цикл обновления</button>
+
+<h2>Добавить видео по ссылке</h2>
+<input id="videoUrl" placeholder="YouTube ссылка или ID">
+<button onclick="addVideo()">Добавить</button>
+
+<h2>Редактировать заметку</h2>
+<input id="noteVideoId" placeholder="ID видео">
+<textarea id="noteText" placeholder="Заметка"></textarea>
+<button onclick="saveNote()">Сохранить заметку</button>
+
+<h2>Избранное</h2>
+<input id="favVideoId" placeholder="ID видео">
+<button onclick="setFavorite(true)">Добавить в избранное</button>
+<button onclick="setFavorite(false)">Убрать из избранного</button>
+
+<h2>Результат</h2>
+<pre id="result"></pre>
+
+<script>
+const API = "https://youtube-video-analytics.qpqalzmnx2.workers.dev";
+
+function key() {
+  return document.getElementById("adminKey").value;
+}
+
+function show(data) {
+  document.getElementById("result").textContent = JSON.stringify(data, null, 2);
+}
+
+async function runUpdate() {
+  const res = await fetch(`${API}/api/update?key=${encodeURIComponent(key())}`);
+  show(await res.json());
+}
+
+async function resetSync() {
+  const res = await fetch(`${API}/api/reset-sync?key=${encodeURIComponent(key())}`);
+  show(await res.json());
+}
+
+async function addVideo() {
+  const res = await fetch(`${API}/api/add-video`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json", "X-Admin-Key": key() },
+    body: JSON.stringify({ urlOrId: document.getElementById("videoUrl").value })
+  });
+  show(await res.json());
+}
+
+async function saveNote() {
+  const res = await fetch(`${API}/api/note`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json", "X-Admin-Key": key() },
+    body: JSON.stringify({
+      videoId: document.getElementById("noteVideoId").value,
+      note: document.getElementById("noteText").value
+    })
+  });
+  show(await res.json());
+}
+
+async function setFavorite(value) {
+  const res = await fetch(`${API}/api/favorite`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json", "X-Admin-Key": key() },
+    body: JSON.stringify({
+      videoId: document.getElementById("favVideoId").value,
+      favorite: value
+    })
+  });
+  show(await res.json());
+}
+</script>
+</body>
+</html>

@@ -1,0 +1,187 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+  <meta charset="UTF-8">
+  <title>YouTube Video Analytics</title>
+  <style>
+    body { font-family: Arial, sans-serif; background:#111; color:white; padding:20px; margin:0; }
+    input, select, button { padding:10px; border-radius:8px; border:1px solid #444; background:#222; color:white; margin:4px; }
+    a { color:white; text-decoration:none; }
+    .grid { display:grid; grid-template-columns:repeat(auto-fill,minmax(280px,1fr)); gap:18px; margin-top:20px; }
+    .card { background:#1d1d1d; border:1px solid #333; border-radius:14px; overflow:hidden; }
+    .card img { width:100%; display:block; background:#222; }
+    .content { padding:12px; }
+    .title { font-weight:bold; margin-bottom:8px; line-height:1.4; }
+    .muted { color:#aaa; font-size:13px; line-height:1.6; }
+    .stats { line-height:1.7; margin-top:8px; }
+    .note { color:#ffd966; margin-top:8px; font-size:13px; }
+    .pagination { margin-top:25px; display:flex; gap:6px; flex-wrap:wrap; }
+    .pagination button.active { background:#e53935; border-color:#e53935; }
+    .links { margin-top:10px; display:flex; gap:10px; flex-wrap:wrap; }
+    .links a { background:#222; padding:8px 10px; border-radius:8px; border:1px solid #444; }
+  </style>
+</head>
+<body>
+
+<h1>YouTube Video Analytics</h1>
+
+<div>
+  <input id="searchInput" placeholder="Поиск по названию или ID">
+  <select id="sortSelect">
+    <option value="newest">Новые</option>
+    <option value="oldest">Старые</option>
+    <option value="views_desc">Больше просмотров</option>
+    <option value="views_asc">Меньше просмотров</option>
+    <option value="likes_desc">Больше лайков</option>
+    <option value="likes_asc">Меньше лайков</option>
+    <option value="comments_desc">Больше комментариев</option>
+    <option value="comments_asc">Меньше комментариев</option>
+    <option value="favorites">Избранные</option>
+  </select>
+  <button onclick="downloadAllCSV()">Скачать все CSV</button>
+  <a href="admin.html">Админка</a>
+</div>
+
+<p id="info">Загрузка...</p>
+<div class="grid" id="videos"></div>
+<div class="pagination" id="pagination"></div>
+
+<script>
+const API = "https://youtube-video-analytics.qpqalzmnx2.workers.dev";
+let currentPage = 1;
+
+function formatNumber(n) {
+  return Number(n || 0).toLocaleString("ru-RU");
+}
+
+function formatUTC(date) {
+  if (!date) return "—";
+  return new Date(date).toISOString().replace("T", " ").replace("Z", " UTC");
+}
+
+async function loadVideos() {
+  const search = document.getElementById("searchInput").value;
+  const sort = document.getElementById("sortSelect").value;
+  const url = `${API}/api/videos?page=${currentPage}&search=${encodeURIComponent(search)}&sort=${encodeURIComponent(sort)}`;
+  const res = await fetch(url);
+  const data = await res.json();
+
+  if (data.error) {
+    document.getElementById("info").textContent = "Ошибка: " + data.error;
+    return;
+  }
+
+  document.getElementById("info").textContent =
+    `Всего найдено: ${data.total || 0} | Страница ${data.page || 1} из ${data.pages || 1}`;
+
+  renderVideos(data.videos || []);
+  renderPagination(data.pages || 1);
+}
+
+function renderVideos(videos) {
+  const box = document.getElementById("videos");
+  box.innerHTML = "";
+
+  videos.forEach(video => {
+    box.innerHTML += `
+      <div class="card">
+        <a href="${video.url}" target="_blank"><img src="${video.thumbnail || ""}" alt=""></a>
+        <div class="content">
+          <div class="title">${video.favorite ? "⭐ " : ""}${escapeHtml(video.title)}</div>
+          <div class="muted">ID: ${video.video_id}</div>
+          <div class="muted">📅 ${formatUTC(video.published_at)}</div>
+          <div class="muted">⏱ ${video.duration || "—"} | 🎬 ${video.type}</div>
+          <div class="muted">Статус: ${video.status}</div>
+          <div class="muted">Обновлено: ${formatUTC(video.checked_at)}</div>
+          <div class="stats">
+            👁 ${formatNumber(video.views)}<br>
+            👍 ${formatNumber(video.likes)}<br>
+            💬 ${formatNumber(video.comments)}
+          </div>
+          ${video.note ? `<div class="note">📝 ${escapeHtml(video.note)}</div>` : ""}
+          <div class="links">
+            <a href="video.html?id=${video.video_id}">📈 История</a>
+            <a href="${video.url}" target="_blank">YouTube</a>
+          </div>
+        </div>
+      </div>
+    `;
+  });
+}
+
+function renderPagination(pages) {
+  const box = document.getElementById("pagination");
+  box.innerHTML = "";
+
+  const maxButtons = 20;
+  let start = Math.max(1, currentPage - 10);
+  let end = Math.min(pages, start + maxButtons - 1);
+
+  if (end - start < maxButtons - 1) {
+    start = Math.max(1, end - maxButtons + 1);
+  }
+
+  if (currentPage > 1) box.innerHTML += `<button onclick="goPage(${currentPage - 1})">←</button>`;
+
+  for (let i = start; i <= end; i++) {
+    box.innerHTML += `<button class="${i === currentPage ? "active" : ""}" onclick="goPage(${i})">${i}</button>`;
+  }
+
+  if (currentPage < pages) box.innerHTML += `<button onclick="goPage(${currentPage + 1})">→</button>`;
+}
+
+function goPage(page) {
+  currentPage = page;
+  loadVideos();
+  window.scrollTo({ top: 0, behavior: "smooth" });
+}
+
+async function downloadAllCSV() {
+  const res = await fetch(`${API}/api/export-videos`);
+  const videos = await res.json();
+
+  if (!Array.isArray(videos)) {
+    alert("Ошибка экспорта");
+    return;
+  }
+
+  const headers = ["video_id","title","published_at","duration","type","status","views","likes","comments","checked_at","url"];
+  let csv = headers.join(",") + "\n";
+
+  videos.forEach(v => {
+    csv += headers.map(h => csvCell(v[h])).join(",") + "\n";
+  });
+
+  const blob = new Blob([csv], { type: "text/csv;charset=utf-8" });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement("a");
+  a.href = url;
+  a.download = "youtube-videos.csv";
+  a.click();
+  URL.revokeObjectURL(url);
+}
+
+function csvCell(value) {
+  const text = String(value ?? "");
+  return '"' + text.replaceAll('"', '""') + '"';
+}
+
+function escapeHtml(text) {
+  return String(text || "").replaceAll("&", "&amp;").replaceAll("<", "&lt;").replaceAll(">", "&gt;");
+}
+
+document.getElementById("searchInput").addEventListener("input", () => {
+  currentPage = 1;
+  loadVideos();
+});
+
+document.getElementById("sortSelect").addEventListener("change", () => {
+  currentPage = 1;
+  loadVideos();
+});
+
+loadVideos();
+setInterval(loadVideos, 15 * 60 * 1000);
+</script>
+</body>
+</html>
