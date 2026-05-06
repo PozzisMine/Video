@@ -19,7 +19,7 @@
 
     .stats {
       display: grid;
-      grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+      grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
       gap: 15px;
       margin-bottom: 20px;
     }
@@ -38,8 +38,14 @@
     }
 
     .stat-value {
-      font-size: 22px;
+      font-size: 24px;
       font-weight: bold;
+      margin-bottom: 10px;
+    }
+
+    .green {
+      color: #66ff99;
+      line-height: 1.7;
     }
 
     .tabs {
@@ -117,10 +123,6 @@
       line-height: 1.7;
     }
 
-    .green {
-      color: #66ff99;
-    }
-
     .pagination {
       margin-top: 25px;
       display: flex;
@@ -164,8 +166,10 @@
     <option value="views_asc">Меньше просмотров</option>
     <option value="likes_desc">Больше лайков</option>
     <option value="comments_desc">Больше комментариев</option>
-    <option value="views_gain_hour_desc">Больше за час</option>
-    <option value="views_gain_day_desc">Больше за 24 часа</option>
+    <option value="views_gain_hour_desc">Больше просмотров за час</option>
+    <option value="views_gain_day_desc">Больше просмотров за 24 часа</option>
+    <option value="likes_gain_hour_desc">Больше лайков за час</option>
+    <option value="comments_gain_hour_desc">Больше комментариев за час</option>
   </select>
 
   <a href="admin.html">
@@ -184,6 +188,7 @@ const API = "https://youtube-video-analytics.qpqalzmnx2.workers.dev";
 
 let currentPage = 1;
 let currentType = "all";
+let totals = null;
 
 function formatNumber(n) {
   return Number(n || 0).toLocaleString("ru-RU");
@@ -196,6 +201,83 @@ function formatUTC(date) {
     .toISOString()
     .replace("T", " ")
     .replace("Z", " UTC");
+}
+
+async function loadTotals() {
+  const res = await fetch(`${API}/api/totals`);
+  totals = await res.json();
+  renderStats();
+}
+
+function renderStats() {
+  const data = totals?.[currentType] || totals?.all || {
+    total_videos: 0,
+    total_views: 0,
+    total_likes: 0,
+    total_comments: 0,
+    views_gain_hour: 0,
+    views_gain_day: 0,
+    likes_gain_hour: 0,
+    likes_gain_day: 0,
+    comments_gain_hour: 0,
+    comments_gain_day: 0
+  };
+
+  if (currentType === "hidden") {
+    document.getElementById("globalStats").innerHTML = `
+      <div class="stat-card">
+        <div class="stat-title">Скрытые / удалённые</div>
+        <div class="stat-value">Не учитываются в общей статистике</div>
+      </div>
+    `;
+    return;
+  }
+
+  document.getElementById("globalStats").innerHTML = `
+    <div class="stat-card">
+      <div class="stat-title">Видео</div>
+      <div class="stat-value">${formatNumber(data.total_videos)}</div>
+    </div>
+
+    <div class="stat-card">
+      <div class="stat-title">Общие просмотры</div>
+      <div class="stat-value">${formatNumber(data.total_views)}</div>
+
+      <div class="green">
+        +${formatNumber(data.views_gain_hour)} за час
+      </div>
+
+      <div class="green">
+        +${formatNumber(data.views_gain_day)} за 24 часа
+      </div>
+    </div>
+
+    <div class="stat-card">
+      <div class="stat-title">Общие лайки</div>
+      <div class="stat-value">${formatNumber(data.total_likes)}</div>
+
+      <div class="green">
+        +${formatNumber(data.likes_gain_hour)} за час
+      </div>
+
+      <div class="green">
+        +${formatNumber(data.likes_gain_day)} за 24 часа
+      </div>
+    </div>
+
+    <div class="stat-card">
+      <div class="stat-title">Общие комментарии</div>
+      <div class="stat-value">${formatNumber(data.total_comments)}</div>
+
+      <div class="green">
+        +${formatNumber(data.comments_gain_hour)} за час
+      </div>
+
+      <div class="green">
+        +${formatNumber(data.comments_gain_day)} за 24 часа
+      </div>
+    </div>
+  `;
 }
 
 async function loadVideos() {
@@ -214,52 +296,8 @@ async function loadVideos() {
   document.getElementById("info").textContent =
     `Видео: ${data.total || 0} | Страница ${data.page || 1} из ${data.pages || 1}`;
 
-  renderStats(data.videos || []);
   renderVideos(data.videos || []);
   renderPagination(data.pages || 1);
-}
-
-function renderStats(videos) {
-  const visible = videos.filter(v => v.status === "active");
-
-  const totalViews = visible.reduce((a, b) => a + Number(b.views || 0), 0);
-  const totalLikes = visible.reduce((a, b) => a + Number(b.likes || 0), 0);
-  const totalComments = visible.reduce((a, b) => a + Number(b.comments || 0), 0);
-
-  const gainHour = visible.reduce((a, b) => a + Number(b.views_gain_hour || 0), 0);
-  const gainDay = visible.reduce((a, b) => a + Number(b.views_gain_day || 0), 0);
-
-  document.getElementById("globalStats").innerHTML = `
-    <div class="stat-card">
-      <div class="stat-title">Видео</div>
-      <div class="stat-value">${formatNumber(visible.length)}</div>
-    </div>
-
-    <div class="stat-card">
-      <div class="stat-title">Просмотры</div>
-      <div class="stat-value">${formatNumber(totalViews)}</div>
-    </div>
-
-    <div class="stat-card">
-      <div class="stat-title">Лайки</div>
-      <div class="stat-value">${formatNumber(totalLikes)}</div>
-    </div>
-
-    <div class="stat-card">
-      <div class="stat-title">Комментарии</div>
-      <div class="stat-value">${formatNumber(totalComments)}</div>
-    </div>
-
-    <div class="stat-card">
-      <div class="stat-title">Рост за час</div>
-      <div class="stat-value green">+${formatNumber(gainHour)}</div>
-    </div>
-
-    <div class="stat-card">
-      <div class="stat-title">Рост за 24 часа</div>
-      <div class="stat-value green">+${formatNumber(gainDay)}</div>
-    </div>
-  `;
 }
 
 function renderVideos(videos) {
@@ -273,6 +311,7 @@ function renderVideos(videos) {
 
         <div class="content">
           <div class="title">
+            ${video.favorite ? "⭐ " : ""}
             ${escapeHtml(video.title)}
           </div>
 
@@ -288,11 +327,19 @@ function renderVideos(videos) {
             💬 ${formatNumber(video.comments)}<br><br>
 
             <span class="green">
-              📈 +${formatNumber(video.views_gain_hour || 0)} за час
+              📈 +${formatNumber(video.views_gain_hour || 0)} просмотров за час
             </span><br>
 
             <span class="green">
-              📈 +${formatNumber(video.views_gain_day || 0)} за 24 часа
+              📈 +${formatNumber(video.views_gain_day || 0)} просмотров за 24 часа
+            </span><br>
+
+            <span class="green">
+              👍 +${formatNumber(video.likes_gain_hour || 0)} лайков за час
+            </span><br>
+
+            <span class="green">
+              💬 +${formatNumber(video.comments_gain_hour || 0)} комментариев за час
             </span>
           </div>
 
@@ -320,6 +367,7 @@ function renderPagination(pages) {
   }
 
   const maxButtons = 15;
+
   let start = Math.max(1, currentPage - 7);
   let end = Math.min(pages, start + maxButtons - 1);
 
@@ -379,6 +427,7 @@ for (const tab of document.querySelectorAll(".tab")) {
     currentType = tab.dataset.type;
     currentPage = 1;
 
+    renderStats();
     loadVideos();
   });
 }
@@ -395,8 +444,13 @@ document.getElementById("sortSelect")
     loadVideos();
   });
 
+loadTotals();
 loadVideos();
-setInterval(loadVideos, 15 * 60 * 1000);
+
+setInterval(() => {
+  loadTotals();
+  loadVideos();
+}, 15 * 60 * 1000);
 </script>
 
 </body>
