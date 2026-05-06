@@ -3,52 +3,187 @@
 <head>
   <meta charset="UTF-8">
   <title>YouTube Video Analytics</title>
+
   <style>
-    body { font-family: Arial, sans-serif; background:#111; color:white; padding:20px; margin:0; }
-    input, select, button { padding:10px; border-radius:8px; border:1px solid #444; background:#222; color:white; margin:4px; }
-    a { color:white; text-decoration:none; }
-    .grid { display:grid; grid-template-columns:repeat(auto-fill,minmax(280px,1fr)); gap:18px; margin-top:20px; }
-    .card { background:#1d1d1d; border:1px solid #333; border-radius:14px; overflow:hidden; }
-    .card img { width:100%; display:block; background:#222; }
-    .content { padding:12px; }
-    .title { font-weight:bold; margin-bottom:8px; line-height:1.4; }
-    .muted { color:#aaa; font-size:13px; line-height:1.6; }
-    .stats { line-height:1.7; margin-top:8px; }
-    .note { color:#ffd966; margin-top:8px; font-size:13px; }
-    .pagination { margin-top:25px; display:flex; gap:6px; flex-wrap:wrap; }
-    .pagination button.active { background:#e53935; border-color:#e53935; }
-    .links { margin-top:10px; display:flex; gap:10px; flex-wrap:wrap; }
-    .links a { background:#222; padding:8px 10px; border-radius:8px; border:1px solid #444; }
+    body {
+      font-family: Arial, sans-serif;
+      background: #111;
+      color: white;
+      margin: 0;
+      padding: 20px;
+    }
+
+    h1 {
+      margin-top: 0;
+    }
+
+    .stats {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+      gap: 15px;
+      margin-bottom: 20px;
+    }
+
+    .stat-card {
+      background: #1d1d1d;
+      border: 1px solid #333;
+      border-radius: 14px;
+      padding: 15px;
+    }
+
+    .stat-title {
+      color: #aaa;
+      font-size: 13px;
+      margin-bottom: 8px;
+    }
+
+    .stat-value {
+      font-size: 22px;
+      font-weight: bold;
+    }
+
+    .tabs {
+      display: flex;
+      gap: 10px;
+      flex-wrap: wrap;
+      margin-bottom: 20px;
+    }
+
+    .tab {
+      padding: 10px 16px;
+      background: #1d1d1d;
+      border: 1px solid #333;
+      border-radius: 10px;
+      cursor: pointer;
+    }
+
+    .tab.active {
+      background: #e53935;
+      border-color: #e53935;
+    }
+
+    .controls {
+      display: flex;
+      gap: 10px;
+      flex-wrap: wrap;
+      margin-bottom: 20px;
+    }
+
+    input, select, button {
+      padding: 10px;
+      border-radius: 8px;
+      border: 1px solid #444;
+      background: #222;
+      color: white;
+    }
+
+    .grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fill, minmax(320px, 1fr));
+      gap: 20px;
+    }
+
+    .card {
+      background: #1d1d1d;
+      border: 1px solid #333;
+      border-radius: 14px;
+      overflow: hidden;
+    }
+
+    .card img {
+      width: 100%;
+      display: block;
+      background: #222;
+    }
+
+    .content {
+      padding: 14px;
+    }
+
+    .title {
+      font-weight: bold;
+      margin-bottom: 10px;
+      line-height: 1.5;
+    }
+
+    .muted {
+      color: #aaa;
+      font-size: 13px;
+      line-height: 1.7;
+    }
+
+    .growth {
+      margin-top: 10px;
+      line-height: 1.7;
+    }
+
+    .green {
+      color: #66ff99;
+    }
+
+    .pagination {
+      margin-top: 25px;
+      display: flex;
+      gap: 6px;
+      flex-wrap: wrap;
+      align-items: center;
+    }
+
+    .pagination button.active {
+      background: #e53935;
+      border-color: #e53935;
+    }
+
+    a {
+      color: white;
+      text-decoration: none;
+    }
   </style>
 </head>
 <body>
 
 <h1>YouTube Video Analytics</h1>
 
-<div>
+<div class="stats" id="globalStats"></div>
+
+<div class="tabs">
+  <div class="tab active" data-type="all">Все</div>
+  <div class="tab" data-type="video">Видео</div>
+  <div class="tab" data-type="shorts">Shorts</div>
+  <div class="tab" data-type="streams">Стримы</div>
+  <div class="tab" data-type="hidden">Скрытые / удалённые</div>
+</div>
+
+<div class="controls">
   <input id="searchInput" placeholder="Поиск по названию или ID">
+
   <select id="sortSelect">
     <option value="newest">Новые</option>
     <option value="oldest">Старые</option>
     <option value="views_desc">Больше просмотров</option>
     <option value="views_asc">Меньше просмотров</option>
     <option value="likes_desc">Больше лайков</option>
-    <option value="likes_asc">Меньше лайков</option>
     <option value="comments_desc">Больше комментариев</option>
-    <option value="comments_asc">Меньше комментариев</option>
-    <option value="favorites">Избранные</option>
+    <option value="views_gain_hour_desc">Больше за час</option>
+    <option value="views_gain_day_desc">Больше за 24 часа</option>
   </select>
-  <button onclick="downloadAllCSV()">Скачать все CSV</button>
-  <a href="admin.html">Админка</a>
+
+  <a href="admin.html">
+    <button>Админка</button>
+  </a>
 </div>
 
 <p id="info">Загрузка...</p>
+
 <div class="grid" id="videos"></div>
+
 <div class="pagination" id="pagination"></div>
 
 <script>
 const API = "https://youtube-video-analytics.qpqalzmnx2.workers.dev";
+
 let currentPage = 1;
+let currentType = "all";
 
 function formatNumber(n) {
   return Number(n || 0).toLocaleString("ru-RU");
@@ -56,26 +191,75 @@ function formatNumber(n) {
 
 function formatUTC(date) {
   if (!date) return "—";
-  return new Date(date).toISOString().replace("T", " ").replace("Z", " UTC");
+
+  return new Date(date)
+    .toISOString()
+    .replace("T", " ")
+    .replace("Z", " UTC");
 }
 
 async function loadVideos() {
   const search = document.getElementById("searchInput").value;
   const sort = document.getElementById("sortSelect").value;
-  const url = `${API}/api/videos?page=${currentPage}&search=${encodeURIComponent(search)}&sort=${encodeURIComponent(sort)}`;
+
+  const url =
+    `${API}/api/videos?page=${currentPage}` +
+    `&search=${encodeURIComponent(search)}` +
+    `&sort=${encodeURIComponent(sort)}` +
+    `&type=${encodeURIComponent(currentType)}`;
+
   const res = await fetch(url);
   const data = await res.json();
 
-  if (data.error) {
-    document.getElementById("info").textContent = "Ошибка: " + data.error;
-    return;
-  }
-
   document.getElementById("info").textContent =
-    `Всего найдено: ${data.total || 0} | Страница ${data.page || 1} из ${data.pages || 1}`;
+    `Видео: ${data.total || 0} | Страница ${data.page || 1} из ${data.pages || 1}`;
 
+  renderStats(data.videos || []);
   renderVideos(data.videos || []);
   renderPagination(data.pages || 1);
+}
+
+function renderStats(videos) {
+  const visible = videos.filter(v => v.status === "active");
+
+  const totalViews = visible.reduce((a, b) => a + Number(b.views || 0), 0);
+  const totalLikes = visible.reduce((a, b) => a + Number(b.likes || 0), 0);
+  const totalComments = visible.reduce((a, b) => a + Number(b.comments || 0), 0);
+
+  const gainHour = visible.reduce((a, b) => a + Number(b.views_gain_hour || 0), 0);
+  const gainDay = visible.reduce((a, b) => a + Number(b.views_gain_day || 0), 0);
+
+  document.getElementById("globalStats").innerHTML = `
+    <div class="stat-card">
+      <div class="stat-title">Видео</div>
+      <div class="stat-value">${formatNumber(visible.length)}</div>
+    </div>
+
+    <div class="stat-card">
+      <div class="stat-title">Просмотры</div>
+      <div class="stat-value">${formatNumber(totalViews)}</div>
+    </div>
+
+    <div class="stat-card">
+      <div class="stat-title">Лайки</div>
+      <div class="stat-value">${formatNumber(totalLikes)}</div>
+    </div>
+
+    <div class="stat-card">
+      <div class="stat-title">Комментарии</div>
+      <div class="stat-value">${formatNumber(totalComments)}</div>
+    </div>
+
+    <div class="stat-card">
+      <div class="stat-title">Рост за час</div>
+      <div class="stat-value green">+${formatNumber(gainHour)}</div>
+    </div>
+
+    <div class="stat-card">
+      <div class="stat-title">Рост за 24 часа</div>
+      <div class="stat-value green">+${formatNumber(gainDay)}</div>
+    </div>
+  `;
 }
 
 function renderVideos(videos) {
@@ -85,24 +269,42 @@ function renderVideos(videos) {
   videos.forEach(video => {
     box.innerHTML += `
       <div class="card">
-        <a href="${video.url}" target="_blank"><img src="${video.thumbnail || ""}" alt=""></a>
+        <img src="${video.thumbnail || ""}">
+
         <div class="content">
-          <div class="title">${video.favorite ? "⭐ " : ""}${escapeHtml(video.title)}</div>
+          <div class="title">
+            ${escapeHtml(video.title)}
+          </div>
+
           <div class="muted">ID: ${video.video_id}</div>
           <div class="muted">📅 ${formatUTC(video.published_at)}</div>
-          <div class="muted">⏱ ${video.duration || "—"} | 🎬 ${video.type}</div>
+          <div class="muted">⏱ ${video.duration || "—"}</div>
+          <div class="muted">🎬 ${video.type}</div>
           <div class="muted">Статус: ${video.status}</div>
-          <div class="muted">Обновлено: ${formatUTC(video.checked_at)}</div>
-          <div class="stats">
+
+          <div class="growth">
             👁 ${formatNumber(video.views)}<br>
             👍 ${formatNumber(video.likes)}<br>
-            💬 ${formatNumber(video.comments)}
+            💬 ${formatNumber(video.comments)}<br><br>
+
+            <span class="green">
+              📈 +${formatNumber(video.views_gain_hour || 0)} за час
+            </span><br>
+
+            <span class="green">
+              📈 +${formatNumber(video.views_gain_day || 0)} за 24 часа
+            </span>
           </div>
-          ${video.note ? `<div class="note">📝 ${escapeHtml(video.note)}</div>` : ""}
-          <div class="links">
-            <a href="video.html?id=${video.video_id}">📈 История</a>
-            <a href="${video.url}" target="_blank">YouTube</a>
-          </div>
+
+          <br>
+
+          <a href="video.html?id=${video.video_id}">
+            <button>История</button>
+          </a>
+
+          <a href="${video.url}" target="_blank">
+            <button>YouTube</button>
+          </a>
         </div>
       </div>
     `;
@@ -113,75 +315,89 @@ function renderPagination(pages) {
   const box = document.getElementById("pagination");
   box.innerHTML = "";
 
-  const maxButtons = 20;
-  let start = Math.max(1, currentPage - 10);
+  if (currentPage > 1) {
+    box.innerHTML += `<button onclick="goPage(${currentPage - 1})">←</button>`;
+  }
+
+  const maxButtons = 15;
+  let start = Math.max(1, currentPage - 7);
   let end = Math.min(pages, start + maxButtons - 1);
 
-  if (end - start < maxButtons - 1) {
-    start = Math.max(1, end - maxButtons + 1);
-  }
-
-  if (currentPage > 1) box.innerHTML += `<button onclick="goPage(${currentPage - 1})">←</button>`;
-
   for (let i = start; i <= end; i++) {
-    box.innerHTML += `<button class="${i === currentPage ? "active" : ""}" onclick="goPage(${i})">${i}</button>`;
+    box.innerHTML += `
+      <button
+        class="${i === currentPage ? "active" : ""}"
+        onclick="goPage(${i})">
+        ${i}
+      </button>
+    `;
   }
 
-  if (currentPage < pages) box.innerHTML += `<button onclick="goPage(${currentPage + 1})">→</button>`;
+  if (currentPage < pages) {
+    box.innerHTML += `<button onclick="goPage(${currentPage + 1})">→</button>`;
+  }
+
+  box.innerHTML += `
+    <input id="pageJump" type="number" min="1" placeholder="Страница" style="width:100px">
+    <button onclick="jumpPage()">Открыть</button>
+  `;
+}
+
+function jumpPage() {
+  const value = Number(document.getElementById("pageJump").value);
+
+  if (!value || value < 1) return;
+
+  currentPage = value;
+  loadVideos();
 }
 
 function goPage(page) {
   currentPage = page;
   loadVideos();
-  window.scrollTo({ top: 0, behavior: "smooth" });
-}
 
-async function downloadAllCSV() {
-  const res = await fetch(`${API}/api/export-videos`);
-  const videos = await res.json();
-
-  if (!Array.isArray(videos)) {
-    alert("Ошибка экспорта");
-    return;
-  }
-
-  const headers = ["video_id","title","published_at","duration","type","status","views","likes","comments","checked_at","url"];
-  let csv = headers.join(",") + "\n";
-
-  videos.forEach(v => {
-    csv += headers.map(h => csvCell(v[h])).join(",") + "\n";
+  window.scrollTo({
+    top: 0,
+    behavior: "smooth"
   });
-
-  const blob = new Blob([csv], { type: "text/csv;charset=utf-8" });
-  const url = URL.createObjectURL(blob);
-  const a = document.createElement("a");
-  a.href = url;
-  a.download = "youtube-videos.csv";
-  a.click();
-  URL.revokeObjectURL(url);
-}
-
-function csvCell(value) {
-  const text = String(value ?? "");
-  return '"' + text.replaceAll('"', '""') + '"';
 }
 
 function escapeHtml(text) {
-  return String(text || "").replaceAll("&", "&amp;").replaceAll("<", "&lt;").replaceAll(">", "&gt;");
+  return String(text || "")
+    .replaceAll("&", "&amp;")
+    .replaceAll("<", "&lt;")
+    .replaceAll(">", "&gt;");
 }
 
-document.getElementById("searchInput").addEventListener("input", () => {
-  currentPage = 1;
-  loadVideos();
-});
+for (const tab of document.querySelectorAll(".tab")) {
+  tab.addEventListener("click", () => {
+    document.querySelectorAll(".tab")
+      .forEach(t => t.classList.remove("active"));
 
-document.getElementById("sortSelect").addEventListener("change", () => {
-  currentPage = 1;
-  loadVideos();
-});
+    tab.classList.add("active");
+
+    currentType = tab.dataset.type;
+    currentPage = 1;
+
+    loadVideos();
+  });
+}
+
+document.getElementById("searchInput")
+  .addEventListener("input", () => {
+    currentPage = 1;
+    loadVideos();
+  });
+
+document.getElementById("sortSelect")
+  .addEventListener("change", () => {
+    currentPage = 1;
+    loadVideos();
+  });
 
 loadVideos();
 setInterval(loadVideos, 15 * 60 * 1000);
 </script>
+
 </body>
 </html>
