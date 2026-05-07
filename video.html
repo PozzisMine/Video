@@ -5,44 +5,123 @@
   <title>История видео</title>
   <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
   <style>
-    body { font-family: Arial, sans-serif; background:#111; color:white; padding:20px; margin:0; }
-    button, select { padding:10px; border-radius:8px; border:1px solid #444; background:#222; color:white; margin:5px; }
-    .box { background:#1d1d1d; border:1px solid #333; border-radius:14px; padding:15px; margin-top:15px; }
-    img { max-width:420px; width:100%; border-radius:12px; background:#222; }
-    table { width:100%; border-collapse:collapse; margin-top:15px; }
-    th, td { border-bottom:1px solid #333; padding:8px; text-align:left; }
-    a { color:white; }
+    body {
+      font-family: Arial, sans-serif;
+      background: #111;
+      color: white;
+      padding: 20px;
+      margin: 0;
+    }
+
+    a {
+      color: white;
+    }
+
+    button, select {
+      padding: 10px;
+      border-radius: 8px;
+      border: 1px solid #444;
+      background: #222;
+      color: white;
+      margin: 5px;
+    }
+
+    .box {
+      background: #1d1d1d;
+      border: 1px solid #333;
+      border-radius: 14px;
+      padding: 15px;
+      margin-top: 15px;
+    }
+
+    .charts {
+      display: grid;
+      grid-template-columns: 1fr;
+      gap: 18px;
+    }
+
+    .chart-box {
+      background: #181818;
+      border: 1px solid #333;
+      border-radius: 14px;
+      padding: 15px;
+    }
+
+    img {
+      max-width: 420px;
+      width: 100%;
+      border-radius: 12px;
+      background: #222;
+    }
+
+    table {
+      width: 100%;
+      border-collapse: collapse;
+      margin-top: 15px;
+      font-size: 14px;
+    }
+
+    th, td {
+      border-bottom: 1px solid #333;
+      padding: 8px;
+      text-align: left;
+    }
+
+    .green {
+      color: #66ff99;
+    }
+
+    .red {
+      color: #ff6666;
+    }
   </style>
 </head>
 <body>
 
 <a href="index.html">← Назад</a>
+
 <h1>История видео</h1>
 
 <div id="videoInfo" class="box">Загрузка...</div>
 
 <div class="box">
-  <select id="groupSelect">
-    <option value="hour">Каждый час</option>
-    <option value="day">Каждый день</option>
+  <h2>Графики видео</h2>
+
+  <select id="chartMode">
+    <option value="total">Общие</option>
+    <option value="hour">За 1 час</option>
+    <option value="day">За 24 часа</option>
   </select>
 
-  <select id="metricSelect">
-    <option value="views">Просмотры</option>
-    <option value="likes">Лайки</option>
-    <option value="comments">Комментарии</option>
+  <select id="groupSelect">
+    <option value="hour">По часам</option>
+    <option value="day">По дням</option>
   </select>
 
   <button onclick="loadHistory()">Обновить</button>
   <button onclick="downloadCSV()">Скачать CSV</button>
 </div>
 
-<div class="box">
-  <canvas id="chart"></canvas>
+<div class="box charts">
+  <div class="chart-box">
+    <h3>Просмотры</h3>
+    <canvas id="viewsChart"></canvas>
+  </div>
+
+  <div class="chart-box">
+    <h3>Лайки</h3>
+    <canvas id="likesChart"></canvas>
+  </div>
+
+  <div class="chart-box">
+    <h3>Комментарии</h3>
+    <canvas id="commentsChart"></canvas>
+  </div>
 </div>
 
 <div class="box">
   <h2>Таблица</h2>
+
   <table>
     <thead>
       <tr>
@@ -50,19 +129,29 @@
         <th>Просмотры</th>
         <th>Лайки</th>
         <th>Комментарии</th>
+        <th>Просмотры час</th>
+        <th>Просмотры 24ч</th>
+        <th>Лайки час</th>
+        <th>Лайки 24ч</th>
+        <th>Комментарии час</th>
+        <th>Комментарии 24ч</th>
       </tr>
     </thead>
+
     <tbody id="historyTable"></tbody>
   </table>
 </div>
 
 <script>
 const API = "https://youtube-video-analytics.qpqalzmnx2.workers.dev";
+
 const params = new URLSearchParams(window.location.search);
 const VIDEO_ID = params.get("id");
 
-let chart;
 let historyData = [];
+let viewsChart = null;
+let likesChart = null;
+let commentsChart = null;
 
 function formatNumber(n) {
   return Number(n || 0).toLocaleString("ru-RU");
@@ -70,7 +159,24 @@ function formatNumber(n) {
 
 function formatUTC(date) {
   if (!date) return "—";
-  return new Date(date).toISOString().replace("T", " ").replace("Z", " UTC");
+
+  try {
+    return new Date(date)
+      .toISOString()
+      .replace("T", " ")
+      .replace("Z", " UTC");
+  } catch {
+    return String(date);
+  }
+}
+
+function growthClass(n) {
+  return Number(n || 0) < 0 ? "red" : "green";
+}
+
+function signed(n) {
+  const v = Number(n || 0);
+  return (v > 0 ? "+" : "") + formatNumber(v);
 }
 
 async function loadVideo() {
@@ -83,13 +189,12 @@ async function loadVideo() {
   }
 
   document.getElementById("videoInfo").innerHTML = `
-    <img src="${video.thumbnail || ""}">
+    <img src="${video.thumbnail || ""}" alt="">
     <h2>${escapeHtml(video.title)}</h2>
     <p>ID: ${video.video_id}</p>
     <p>📅 ${formatUTC(video.published_at)}</p>
     <p>⏱ ${video.duration} | 🎬 ${video.type}</p>
     <p>Статус: ${video.status}</p>
-    <p>Обновлено: ${formatUTC(video.checked_at)}</p>
     <p>
       👁 ${formatNumber(video.views)}<br>
       👍 ${formatNumber(video.likes)}<br>
@@ -101,36 +206,63 @@ async function loadVideo() {
 
 async function loadHistory() {
   const group = document.getElementById("groupSelect").value;
-  const metric = document.getElementById("metricSelect").value;
+
   const res = await fetch(`${API}/api/history?id=${VIDEO_ID}&group=${group}`);
   historyData = await res.json();
 
   if (!Array.isArray(historyData)) historyData = [];
 
-  renderChart(metric);
+  renderCharts();
   renderTable();
 }
 
-function renderChart(metric) {
-  const labels = historyData.map(row => row.time_utc);
-  const values = historyData.map(row => Number(row[metric] || 0));
+function renderCharts() {
+  const mode = document.getElementById("chartMode").value;
 
-  if (chart) chart.destroy();
+  const viewsField = mode === "total" ? "views" : mode === "hour" ? "views_gain_hour" : "views_gain_day";
+  const likesField = mode === "total" ? "likes" : mode === "hour" ? "likes_gain_hour" : "likes_gain_day";
+  const commentsField = mode === "total" ? "comments" : mode === "hour" ? "comments_gain_hour" : "comments_gain_day";
 
-  chart = new Chart(document.getElementById("chart"), {
+  viewsChart = renderChart("viewsChart", viewsChart, viewsField, "Просмотры");
+  likesChart = renderChart("likesChart", likesChart, likesField, "Лайки");
+  commentsChart = renderChart("commentsChart", commentsChart, commentsField, "Комментарии");
+}
+
+function renderChart(canvasId, oldChart, field, label) {
+  if (oldChart) oldChart.destroy();
+
+  return new Chart(document.getElementById(canvasId), {
     type: "line",
     data: {
-      labels,
-      datasets: [{ label: metric, data: values }]
+      labels: historyData.map(row => row.time_utc),
+      datasets: [{
+        label,
+        data: historyData.map(row => Number(row[field] || 0)),
+        tension: 0.25
+      }]
     },
     options: {
       responsive: true,
       scales: {
-        x: { ticks: { color: "white", maxRotation: 45, minRotation: 45 } },
-        y: { ticks: { color: "white" } }
+        x: {
+          ticks: {
+            color: "white",
+            maxRotation: 45,
+            minRotation: 45
+          }
+        },
+        y: {
+          ticks: {
+            color: "white"
+          }
+        }
       },
       plugins: {
-        legend: { labels: { color: "white" } }
+        legend: {
+          labels: {
+            color: "white"
+          }
+        }
       }
     }
   });
@@ -147,36 +279,48 @@ function renderTable() {
         <td>${formatNumber(row.views)}</td>
         <td>${formatNumber(row.likes)}</td>
         <td>${formatNumber(row.comments)}</td>
+        <td class="${growthClass(row.views_gain_hour)}">${signed(row.views_gain_hour)}</td>
+        <td class="${growthClass(row.views_gain_day)}">${signed(row.views_gain_day)}</td>
+        <td class="${growthClass(row.likes_gain_hour)}">${signed(row.likes_gain_hour)}</td>
+        <td class="${growthClass(row.likes_gain_day)}">${signed(row.likes_gain_day)}</td>
+        <td class="${growthClass(row.comments_gain_hour)}">${signed(row.comments_gain_hour)}</td>
+        <td class="${growthClass(row.comments_gain_day)}">${signed(row.comments_gain_day)}</td>
       </tr>
     `;
   });
 }
 
 function downloadCSV() {
-  let csv = "time_utc,views,likes,comments\n";
+  let csv = "time_utc,views,likes,comments,views_gain_hour,views_gain_day,likes_gain_hour,likes_gain_day,comments_gain_hour,comments_gain_day\n";
+
   historyData.forEach(row => {
-    csv += `${row.time_utc},${row.views},${row.likes},${row.comments}\n`;
+    csv += `${row.time_utc},${row.views},${row.likes},${row.comments},${row.views_gain_hour},${row.views_gain_day},${row.likes_gain_hour},${row.likes_gain_day},${row.comments_gain_hour},${row.comments_gain_day}\n`;
   });
 
   const blob = new Blob([csv], { type: "text/csv;charset=utf-8" });
   const url = URL.createObjectURL(blob);
+
   const a = document.createElement("a");
   a.href = url;
   a.download = `history-${VIDEO_ID}.csv`;
   a.click();
+
   URL.revokeObjectURL(url);
 }
 
 function escapeHtml(text) {
-  return String(text || "").replaceAll("&", "&amp;").replaceAll("<", "&lt;").replaceAll(">", "&gt;");
+  return String(text || "")
+    .replaceAll("&", "&amp;")
+    .replaceAll("<", "&lt;")
+    .replaceAll(">", "&gt;");
 }
 
-document.getElementById("metricSelect").addEventListener("change", () => {
-  renderChart(document.getElementById("metricSelect").value);
-});
+document.getElementById("chartMode").addEventListener("change", renderCharts);
+document.getElementById("groupSelect").addEventListener("change", loadHistory);
 
 loadVideo();
 loadHistory();
 </script>
+
 </body>
 </html>
