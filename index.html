@@ -2,8 +2,8 @@
 <html lang="ru">
 <head>
   <meta charset="UTF-8">
-  <title>YouTube Video Analytics</title>
-
+  <title>YouTube Analytics</title>
+  <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
   <style>
     body {
       font-family: Arial, sans-serif;
@@ -13,21 +13,42 @@
       padding: 20px;
     }
 
-    h1 {
+    h1, h2, h3 {
       margin-top: 0;
+    }
+
+    a {
+      color: white;
+      text-decoration: none;
+    }
+
+    input, select, button {
+      padding: 10px;
+      border-radius: 8px;
+      border: 1px solid #444;
+      background: #222;
+      color: white;
+      margin: 4px;
+    }
+
+    button {
+      cursor: pointer;
     }
 
     .stats {
       display: grid;
-      grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
+      grid-template-columns: repeat(auto-fit, minmax(230px, 1fr));
       gap: 15px;
       margin-bottom: 20px;
     }
 
-    .stat-card {
+    .stat-card, .box, .card {
       background: #1d1d1d;
       border: 1px solid #333;
       border-radius: 14px;
+    }
+
+    .stat-card {
       padding: 15px;
     }
 
@@ -40,7 +61,7 @@
     .stat-value {
       font-size: 24px;
       font-weight: bold;
-      margin-bottom: 10px;
+      margin-bottom: 8px;
     }
 
     .green {
@@ -48,7 +69,17 @@
       line-height: 1.7;
     }
 
-    .tabs {
+    .red {
+      color: #ff6666;
+      line-height: 1.7;
+    }
+
+    .box {
+      padding: 15px;
+      margin-bottom: 20px;
+    }
+
+    .tabs, .controls {
       display: flex;
       gap: 10px;
       flex-wrap: wrap;
@@ -68,31 +99,26 @@
       border-color: #e53935;
     }
 
-    .controls {
-      display: flex;
-      gap: 10px;
-      flex-wrap: wrap;
-      margin-bottom: 20px;
+    .charts {
+      display: grid;
+      grid-template-columns: 1fr;
+      gap: 18px;
     }
 
-    input, select, button {
-      padding: 10px;
-      border-radius: 8px;
-      border: 1px solid #444;
-      background: #222;
-      color: white;
+    .chart-box {
+      background: #181818;
+      border: 1px solid #333;
+      border-radius: 14px;
+      padding: 15px;
     }
 
     .grid {
       display: grid;
-      grid-template-columns: repeat(auto-fill, minmax(320px, 1fr));
+      grid-template-columns: repeat(auto-fill, minmax(310px, 1fr));
       gap: 20px;
     }
 
     .card {
-      background: #1d1d1d;
-      border: 1px solid #333;
-      border-radius: 14px;
       overflow: hidden;
     }
 
@@ -109,7 +135,7 @@
     .title {
       font-weight: bold;
       margin-bottom: 10px;
-      line-height: 1.5;
+      line-height: 1.45;
     }
 
     .muted {
@@ -136,17 +162,53 @@
       border-color: #e53935;
     }
 
-    a {
-      color: white;
-      text-decoration: none;
+    @media (max-width: 600px) {
+      body { padding: 12px; }
+      .grid { grid-template-columns: 1fr; }
     }
   </style>
 </head>
 <body>
 
-<h1>YouTube Video Analytics</h1>
+<h1>YouTube Analytics</h1>
 
 <div class="stats" id="globalStats"></div>
+
+<div class="box">
+  <h2>Графики канала</h2>
+
+  <div class="controls">
+    <select id="chartMode">
+      <option value="total">Общие</option>
+      <option value="hour">За 1 час</option>
+      <option value="day">За 24 часа</option>
+    </select>
+
+    <select id="chartGroup">
+      <option value="hour">По часам</option>
+      <option value="day">По дням</option>
+    </select>
+
+    <button onclick="loadCharts()">Обновить графики</button>
+  </div>
+
+  <div class="charts">
+    <div class="chart-box">
+      <h3>Просмотры</h3>
+      <canvas id="viewsChart"></canvas>
+    </div>
+
+    <div class="chart-box">
+      <h3>Лайки</h3>
+      <canvas id="likesChart"></canvas>
+    </div>
+
+    <div class="chart-box">
+      <h3>Комментарии</h3>
+      <canvas id="commentsChart"></canvas>
+    </div>
+  </div>
+</div>
 
 <div class="tabs">
   <div class="tab active" data-type="all">Все</div>
@@ -162,25 +224,41 @@
   <select id="sortSelect">
     <option value="newest">Новые</option>
     <option value="oldest">Старые</option>
+
     <option value="views_desc">Больше просмотров</option>
     <option value="views_asc">Меньше просмотров</option>
+
     <option value="likes_desc">Больше лайков</option>
+    <option value="likes_asc">Меньше лайков</option>
+
     <option value="comments_desc">Больше комментариев</option>
+    <option value="comments_asc">Меньше комментариев</option>
+
     <option value="views_gain_hour_desc">Больше просмотров за час</option>
+    <option value="views_gain_hour_asc">Меньше просмотров за час</option>
+
     <option value="views_gain_day_desc">Больше просмотров за 24 часа</option>
+    <option value="views_gain_day_asc">Меньше просмотров за 24 часа</option>
+
     <option value="likes_gain_hour_desc">Больше лайков за час</option>
+    <option value="likes_gain_hour_asc">Меньше лайков за час</option>
+
+    <option value="likes_gain_day_desc">Больше лайков за 24 часа</option>
+    <option value="likes_gain_day_asc">Меньше лайков за 24 часа</option>
+
     <option value="comments_gain_hour_desc">Больше комментариев за час</option>
+    <option value="comments_gain_hour_asc">Меньше комментариев за час</option>
+
+    <option value="comments_gain_day_desc">Больше комментариев за 24 часа</option>
+    <option value="comments_gain_day_asc">Меньше комментариев за 24 часа</option>
   </select>
 
-  <a href="admin.html">
-    <button>Админка</button>
-  </a>
+  <a href="admin.html"><button>Админка</button></a>
 </div>
 
 <p id="info">Загрузка...</p>
 
 <div class="grid" id="videos"></div>
-
 <div class="pagination" id="pagination"></div>
 
 <script>
@@ -190,6 +268,10 @@ let currentPage = 1;
 let currentType = "all";
 let totals = null;
 
+let viewsChart = null;
+let likesChart = null;
+let commentsChart = null;
+
 function formatNumber(n) {
   return Number(n || 0).toLocaleString("ru-RU");
 }
@@ -197,41 +279,67 @@ function formatNumber(n) {
 function formatUTC(date) {
   if (!date) return "—";
 
-  return new Date(date)
-    .toISOString()
-    .replace("T", " ")
-    .replace("Z", " UTC");
+  try {
+    return new Date(date)
+      .toISOString()
+      .replace("T", " ")
+      .replace("Z", " UTC");
+  } catch {
+    return String(date);
+  }
+}
+
+function growthClass(n) {
+  return Number(n || 0) < 0 ? "red" : "green";
+}
+
+function signed(n) {
+  const v = Number(n || 0);
+  return (v > 0 ? "+" : "") + formatNumber(v);
 }
 
 async function loadTotals() {
-  const res = await fetch(`${API}/api/totals`);
-  totals = await res.json();
-  renderStats();
+  try {
+    const res = await fetch(`${API}/api/totals`);
+    totals = await res.json();
+    renderStats();
+  } catch (e) {
+    document.getElementById("globalStats").innerHTML = `
+      <div class="stat-card">
+        <div class="stat-title">Ошибка totals</div>
+        <div class="stat-value">${escapeHtml(e.message)}</div>
+      </div>
+    `;
+  }
 }
 
-function renderStats() {
-  const data = totals?.[currentType] || totals?.all || {
+function getCurrentTotals() {
+  return totals?.[currentType] || totals?.all || {
     total_videos: 0,
     total_views: 0,
     total_likes: 0,
     total_comments: 0,
     views_gain_hour: 0,
-    views_gain_day: 0,
     likes_gain_hour: 0,
-    likes_gain_day: 0,
     comments_gain_hour: 0,
+    views_gain_day: 0,
+    likes_gain_day: 0,
     comments_gain_day: 0
   };
+}
 
+function renderStats() {
   if (currentType === "hidden") {
     document.getElementById("globalStats").innerHTML = `
       <div class="stat-card">
-        <div class="stat-title">Скрытые / удалённые</div>
+        <div class="stat-title">Скрытые / удалённые / доступ по ссылке</div>
         <div class="stat-value">Не учитываются в общей статистике</div>
       </div>
     `;
     return;
   }
+
+  const data = getCurrentTotals();
 
   document.getElementById("globalStats").innerHTML = `
     <div class="stat-card">
@@ -242,42 +350,99 @@ function renderStats() {
     <div class="stat-card">
       <div class="stat-title">Общие просмотры</div>
       <div class="stat-value">${formatNumber(data.total_views)}</div>
-
-      <div class="green">
-        +${formatNumber(data.views_gain_hour)} за час
-      </div>
-
-      <div class="green">
-        +${formatNumber(data.views_gain_day)} за 24 часа
-      </div>
+      <div class="${growthClass(data.views_gain_hour)}">${signed(data.views_gain_hour)} за час</div>
+      <div class="${growthClass(data.views_gain_day)}">${signed(data.views_gain_day)} за 24 часа</div>
     </div>
 
     <div class="stat-card">
       <div class="stat-title">Общие лайки</div>
       <div class="stat-value">${formatNumber(data.total_likes)}</div>
-
-      <div class="green">
-        +${formatNumber(data.likes_gain_hour)} за час
-      </div>
-
-      <div class="green">
-        +${formatNumber(data.likes_gain_day)} за 24 часа
-      </div>
+      <div class="${growthClass(data.likes_gain_hour)}">${signed(data.likes_gain_hour)} за час</div>
+      <div class="${growthClass(data.likes_gain_day)}">${signed(data.likes_gain_day)} за 24 часа</div>
     </div>
 
     <div class="stat-card">
       <div class="stat-title">Общие комментарии</div>
       <div class="stat-value">${formatNumber(data.total_comments)}</div>
-
-      <div class="green">
-        +${formatNumber(data.comments_gain_hour)} за час
-      </div>
-
-      <div class="green">
-        +${formatNumber(data.comments_gain_day)} за 24 часа
-      </div>
+      <div class="${growthClass(data.comments_gain_hour)}">${signed(data.comments_gain_hour)} за час</div>
+      <div class="${growthClass(data.comments_gain_day)}">${signed(data.comments_gain_day)} за 24 часа</div>
     </div>
   `;
+}
+
+async function loadCharts() {
+  if (currentType === "hidden") {
+    clearCharts();
+    return;
+  }
+
+  const group = document.getElementById("chartGroup").value;
+  const mode = document.getElementById("chartMode").value;
+
+  try {
+    const res = await fetch(`${API}/api/totals-history?type=${currentType}&group=${group}`);
+    const rows = await res.json();
+
+    const viewField = mode === "total" ? "views" : mode === "hour" ? "views_gain_hour" : "views_gain_day";
+    const likeField = mode === "total" ? "likes" : mode === "hour" ? "likes_gain_hour" : "likes_gain_day";
+    const commentField = mode === "total" ? "comments" : mode === "hour" ? "comments_gain_hour" : "comments_gain_day";
+
+    viewsChart = renderChart("viewsChart", viewsChart, rows, viewField, "Просмотры");
+    likesChart = renderChart("likesChart", likesChart, rows, likeField, "Лайки");
+    commentsChart = renderChart("commentsChart", commentsChart, rows, commentField, "Комментарии");
+  } catch (e) {
+    console.error(e);
+  }
+}
+
+function clearCharts() {
+  if (viewsChart) viewsChart.destroy();
+  if (likesChart) likesChart.destroy();
+  if (commentsChart) commentsChart.destroy();
+
+  viewsChart = null;
+  likesChart = null;
+  commentsChart = null;
+}
+
+function renderChart(canvasId, oldChart, rows, field, label) {
+  if (oldChart) oldChart.destroy();
+
+  return new Chart(document.getElementById(canvasId), {
+    type: "line",
+    data: {
+      labels: rows.map(row => row.time_utc),
+      datasets: [{
+        label,
+        data: rows.map(row => Number(row[field] || 0)),
+        tension: 0.25
+      }]
+    },
+    options: {
+      responsive: true,
+      scales: {
+        x: {
+          ticks: {
+            color: "white",
+            maxRotation: 45,
+            minRotation: 45
+          }
+        },
+        y: {
+          ticks: {
+            color: "white"
+          }
+        }
+      },
+      plugins: {
+        legend: {
+          labels: {
+            color: "white"
+          }
+        }
+      }
+    }
+  });
 }
 
 async function loadVideos() {
@@ -290,14 +455,23 @@ async function loadVideos() {
     `&sort=${encodeURIComponent(sort)}` +
     `&type=${encodeURIComponent(currentType)}`;
 
-  const res = await fetch(url);
-  const data = await res.json();
+  try {
+    const res = await fetch(url);
+    const data = await res.json();
 
-  document.getElementById("info").textContent =
-    `Видео: ${data.total || 0} | Страница ${data.page || 1} из ${data.pages || 1}`;
+    if (data.error) {
+      document.getElementById("info").textContent = "Ошибка: " + data.error;
+      return;
+    }
 
-  renderVideos(data.videos || []);
-  renderPagination(data.pages || 1);
+    document.getElementById("info").textContent =
+      `Видео: ${data.total || 0} | Страница ${data.page || 1} из ${data.pages || 1}`;
+
+    renderVideos(data.videos || []);
+    renderPagination(data.pages || 1);
+  } catch (e) {
+    document.getElementById("info").textContent = "Ошибка загрузки: " + e.message;
+  }
 }
 
 function renderVideos(videos) {
@@ -307,12 +481,11 @@ function renderVideos(videos) {
   videos.forEach(video => {
     box.innerHTML += `
       <div class="card">
-        <img src="${video.thumbnail || ""}">
+        <img src="${video.thumbnail || ""}" alt="">
 
         <div class="content">
           <div class="title">
-            ${video.favorite ? "⭐ " : ""}
-            ${escapeHtml(video.title)}
+            ${video.favorite ? "⭐ " : ""}${escapeHtml(video.title)}
           </div>
 
           <div class="muted">ID: ${video.video_id}</div>
@@ -320,27 +493,21 @@ function renderVideos(videos) {
           <div class="muted">⏱ ${video.duration || "—"}</div>
           <div class="muted">🎬 ${video.type}</div>
           <div class="muted">Статус: ${video.status}</div>
+          <div class="muted">Обновлено: ${formatUTC(video.checked_at)}</div>
 
           <div class="growth">
             👁 ${formatNumber(video.views)}<br>
             👍 ${formatNumber(video.likes)}<br>
             💬 ${formatNumber(video.comments)}<br><br>
 
-            <span class="green">
-              📈 +${formatNumber(video.views_gain_hour || 0)} просмотров за час
-            </span><br>
+            <span class="${growthClass(video.views_gain_hour)}">👁 ${signed(video.views_gain_hour)} просмотров за час</span><br>
+            <span class="${growthClass(video.views_gain_day)}">👁 ${signed(video.views_gain_day)} просмотров за 24 часа</span><br>
 
-            <span class="green">
-              📈 +${formatNumber(video.views_gain_day || 0)} просмотров за 24 часа
-            </span><br>
+            <span class="${growthClass(video.likes_gain_hour)}">👍 ${signed(video.likes_gain_hour)} лайков за час</span><br>
+            <span class="${growthClass(video.likes_gain_day)}">👍 ${signed(video.likes_gain_day)} лайков за 24 часа</span><br>
 
-            <span class="green">
-              👍 +${formatNumber(video.likes_gain_hour || 0)} лайков за час
-            </span><br>
-
-            <span class="green">
-              💬 +${formatNumber(video.comments_gain_hour || 0)} комментариев за час
-            </span>
+            <span class="${growthClass(video.comments_gain_hour)}">💬 ${signed(video.comments_gain_hour)} комментариев за час</span><br>
+            <span class="${growthClass(video.comments_gain_day)}">💬 ${signed(video.comments_gain_day)} комментариев за 24 часа</span>
           </div>
 
           <br>
@@ -367,15 +534,16 @@ function renderPagination(pages) {
   }
 
   const maxButtons = 15;
-
   let start = Math.max(1, currentPage - 7);
   let end = Math.min(pages, start + maxButtons - 1);
 
+  if (end - start < maxButtons - 1) {
+    start = Math.max(1, end - maxButtons + 1);
+  }
+
   for (let i = start; i <= end; i++) {
     box.innerHTML += `
-      <button
-        class="${i === currentPage ? "active" : ""}"
-        onclick="goPage(${i})">
+      <button class="${i === currentPage ? "active" : ""}" onclick="goPage(${i})">
         ${i}
       </button>
     `;
@@ -393,7 +561,6 @@ function renderPagination(pages) {
 
 function jumpPage() {
   const value = Number(document.getElementById("pageJump").value);
-
   if (!value || value < 1) return;
 
   currentPage = value;
@@ -419,36 +586,38 @@ function escapeHtml(text) {
 
 for (const tab of document.querySelectorAll(".tab")) {
   tab.addEventListener("click", () => {
-    document.querySelectorAll(".tab")
-      .forEach(t => t.classList.remove("active"));
-
+    document.querySelectorAll(".tab").forEach(t => t.classList.remove("active"));
     tab.classList.add("active");
 
     currentType = tab.dataset.type;
     currentPage = 1;
 
     renderStats();
+    loadCharts();
     loadVideos();
   });
 }
 
-document.getElementById("searchInput")
-  .addEventListener("input", () => {
-    currentPage = 1;
-    loadVideos();
-  });
+document.getElementById("searchInput").addEventListener("input", () => {
+  currentPage = 1;
+  loadVideos();
+});
 
-document.getElementById("sortSelect")
-  .addEventListener("change", () => {
-    currentPage = 1;
-    loadVideos();
-  });
+document.getElementById("sortSelect").addEventListener("change", () => {
+  currentPage = 1;
+  loadVideos();
+});
+
+document.getElementById("chartMode").addEventListener("change", loadCharts);
+document.getElementById("chartGroup").addEventListener("change", loadCharts);
 
 loadTotals();
+loadCharts();
 loadVideos();
 
 setInterval(() => {
   loadTotals();
+  loadCharts();
   loadVideos();
 }, 15 * 60 * 1000);
 </script>
